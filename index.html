@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dial Code Picker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one narrow column. A phone field (country button + number) sits above a result card with the full international number. */
+:root {
+  --bg: #EDF1F4;
+  --surface: #FFFFFF;
+  --fg: #13222C;
+  --muted: #566874;
+  --line: #D2DBE2;
+  --accent: #0A6B5B;
+  --accent-fg: #FFFFFF;
+  --accent-soft: #DDF1EC;
+  --ok: #0A6B5B;
+  --warn: #8A5A00;
+  --bad: #B42318;
+  --tick: #C9D3DA;
+  --font-display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D161C;
+    --surface: #152028;
+    --fg: #E5EEF2;
+    --muted: #93A5B0;
+    --line: #2A3A44;
+    --accent: #5FD3B4;
+    --accent-fg: #06261F;
+    --accent-soft: #17342E;
+    --ok: #5FD3B4;
+    --warn: #E9B64F;
+    --bad: #FF8A7A;
+    --tick: #2F414C;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D161C;
+  --surface: #152028;
+  --fg: #E5EEF2;
+  --muted: #93A5B0;
+  --line: #2A3A44;
+  --accent: #5FD3B4;
+  --accent-fg: #06261F;
+  --accent-soft: #17342E;
+  --ok: #5FD3B4;
+  --warn: #E9B64F;
+  --bad: #FF8A7A;
+  --tick: #2F414C;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: 1.5;
+  padding-block: 40px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 520px; margin: 0 auto; display: grid; gap: 20px; }
+.eyebrow { margin: 0 0 6px; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+h1 { margin: 0 0 8px; font-size: clamp(2rem, 7vw, 2.75rem); font-weight: 600; letter-spacing: -0.025em; line-height: 1.05; text-wrap: balance; }
+.lede { margin: 0; color: var(--muted); max-width: 46ch; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+label.lbl, h2 { display: block; margin: 0 0 10px; font-size: 13px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+
+.field { position: relative; display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.cbtn { display: flex; align-items: center; gap: 8px; padding: 0 12px; min-height: 52px; border: 0; border-right: 1px solid var(--line); border-radius: 10px 0 0 10px; background: transparent; color: var(--fg); font: inherit; cursor: pointer; }
+.cbtn:hover { background: var(--accent-soft); }
+.cbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.cflag { font-size: 22px; line-height: 1; }
+.ccode { font-family: var(--font-mono); font-size: 16px; font-weight: 500; white-space: nowrap; }
+.chev { width: 14px; height: 14px; color: var(--muted); transition: transform 0.15s; }
+.cbtn[aria-expanded="true"] .chev { transform: rotate(180deg); }
+#num { flex: 1; min-width: 0; padding: 0 14px; border: 0; background: transparent; color: var(--fg); font-family: var(--font-mono); font-size: 18px; letter-spacing: 0.02em; border-radius: 0 10px 10px 0; }
+#num:focus { outline: none; }
+#num::placeholder { color: var(--muted); opacity: 0.7; }
+
+.panel { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; right: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(10, 25, 35, 0.18); overflow: hidden; }
+.panel input { width: 100%; padding: 14px 16px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--fg); font: inherit; font-size: 16px; }
+.panel input:focus { outline: none; background: var(--accent-soft); }
+.list { list-style: none; margin: 0; padding: 4px; max-height: 300px; overflow-y: auto; overscroll-behavior: contain; }
+.list li { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; cursor: pointer; }
+.list li .n { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.list li .c { font-family: var(--font-mono); font-size: 14px; color: var(--muted); white-space: nowrap; }
+.list li .f { font-size: 20px; width: 28px; text-align: center; }
+.list li.active { background: var(--accent-soft); }
+.list li[aria-selected="true"] .n { font-weight: 600; }
+.empty { padding: 18px 16px; color: var(--muted); }
+
+.status { margin: 14px 0 0; display: flex; align-items: flex-start; gap: 8px; font-size: 14px; min-height: 22px; }
+.status svg { flex: none; width: 16px; height: 16px; margin-top: 3px; }
+.status[data-state="ok"] { color: var(--ok); }
+.status[data-state="warn"] { color: var(--warn); }
+.status[data-state="bad"] { color: var(--bad); }
+.status[data-state="idle"] { color: var(--muted); }
+.meter { display: grid; grid-template-columns: repeat(15, 1fr); gap: 3px; margin-top: 12px; }
+.meter i { height: 6px; border-radius: 2px; background: var(--tick); }
+.meter i.on { background: var(--accent); }
+.meter.over i.on { background: var(--bad); }
+.meter-cap { display: flex; justify-content: space-between; margin-top: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--fg); font: inherit; font-size: 14px; cursor: pointer; }
+.chip:hover { background: var(--accent-soft); }
+.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.chip .m { font-family: var(--font-mono); font-size: 13px; }
+
+output.big { display: block; font-family: var(--font-mono); font-size: clamp(1.4rem, 6vw, 2rem); font-weight: 500; letter-spacing: 0.01em; overflow-wrap: anywhere; line-height: 1.25; }
+output.big .dim { color: var(--muted); }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 16px 0 0; font-size: 14px; }
+dt { color: var(--muted); }
+dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+dd.mono { font-family: var(--font-mono); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 18px; }
+.copy { padding: 11px 18px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-fg); font: inherit; font-weight: 600; cursor: pointer; }
+.copy:hover { filter: brightness(1.08); }
+.copy:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.copy:disabled { opacity: 0.45; cursor: not-allowed; }
+.note { margin: 0; font-size: 13px; color: var(--muted); }
+.foot { margin: 0; font-size: 13px; color: var(--muted); max-width: 52ch; }
+
+.send { margin-top: 18px; width: 100%; padding: 14px 18px; font-size: 16px; }
+.otp { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); display: grid; gap: 12px; }
+.otp-t { margin: 0; font-size: 15px; overflow-wrap: anywhere; }
+.otp-row { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.ob { width: 100%; min-width: 0; height: 54px; padding: 0; text-align: center; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); font-family: var(--font-mono); font-size: 22px; font-weight: 500; }
+.ob:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ob:disabled { opacity: 0.6; }
+.demo { margin: 0; padding: 10px 12px; border: 1px dashed var(--warn); border-radius: 10px; color: var(--warn); font-size: 14px; }
+.otp .status { margin: 0; }
+.otp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.link { background: none; border: 0; padding: 6px 0; color: var(--accent); font: inherit; font-size: 14px; cursor: pointer; text-decoration: underline; }
+.link:disabled { color: var(--muted); text-decoration: none; cursor: default; }
+.link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (max-width: 420px) {
+  .card { padding: 16px; }
+  .ob { height: 48px; font-size: 20px; }
+  .ccode { font-size: 15px; }
+  #num { font-size: 17px; padding: 0 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .chev { transition: none; } }
+</style>
+
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <p class="eyebrow">Phone number field</p>
+    <h1>Dial Code Picker</h1>
+    <p class="lede">Choose any country and type the number. The country code is added for you, and a full international number comes out below.</p>
+  </header>
+
+  <section class="card" aria-labelledby="lbl">
+    <label class="lbl" id="lbl" for="num">Phone number</label>
+    <div class="field" id="field">
+      <button type="button" class="cbtn" id="cbtn" aria-haspopup="listbox" aria-expanded="false" aria-controls="panel" aria-label="Country">
+        <span class="cflag" id="cflag" aria-hidden="true"></span>
+        <span class="ccode" id="ccode"></span>
+        <svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6l5 5 5-5"/></svg>
+      </button>
+      <input id="num" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="Phone number" value="300 1234567" aria-describedby="status">
+      <div class="panel" id="panel" hidden>
+        <input id="q" type="search" placeholder="Search country or code, e.g. Pakistan or 92" aria-label="Search countries" autocomplete="off" spellcheck="false">
+        <ul class="list" id="list" role="listbox" aria-label="Countries"></ul>
+      </div>
+    </div>
+
+    <p class="status" id="status" data-state="idle" aria-live="polite"></p>
+    <div class="meter" id="meter" aria-hidden="true"></div>
+    <div class="meter-cap" aria-hidden="true"><span id="digits">0 digits</span><span>max 15</span></div>
+
+    <div class="chips" id="chips" role="group" aria-label="Common countries"></div>
+
+    <button type="button" class="copy send" id="send" disabled>Send OTP</button>
+    <div class="otp" id="otp" hidden>
+      <p class="otp-t" id="otpt"></p>
+      <div class="otp-row" id="otprow" role="group" aria-label="6-digit code"></div>
+      <p class="demo" id="demo" hidden></p>
+      <p class="status" id="ostatus" data-state="idle" aria-live="polite"></p>
+      <div class="otp-actions">
+        <button type="button" class="copy" id="verify" disabled>Verify</button>
+        <button type="button" class="link" id="resend" disabled>Resend OTP</button>
+        <button type="button" class="link" id="change">Change number</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="rh">
+    <h2 id="rh">Full number</h2>
+    <output class="big" id="out" for="num cbtn"></output>
+    <dl>
+      <dt>Country</dt><dd id="rc"></dd>
+      <dt>Code</dt><dd class="mono" id="rcode"></dd>
+      <dt>Saved as</dt><dd class="mono" id="e164"></dd>
+    </dl>
+    <div class="actions">
+      <button type="button" class="copy" id="copy">Copy number</button>
+      <p class="note" id="cnote" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <p class="foot">Pasting a number that starts with + picks the country by itself. A leading 0 (like 0300…) is dropped, because international format leaves it out. This checks length only. It cannot tell whether the number really exists. The code is sent to your phone by SMS.</p>
+</main>
+
+<script>
+(function () {
+  var RAW = "AF|Afghanistan|93\nAX|Åland Islands|358\nAL|Albania|355\nDZ|Algeria|213\nAS|American Samoa|1684\nAD|Andorra|376\nAO|Angola|244\nAI|Anguilla|1264\nAG|Antigua and Barbuda|1268\nAR|Argentina|54\nAM|Armenia|374\nAW|Aruba|297\nAU|Australia|61\nAT|Austria|43\nAZ|Azerbaijan|994\nBS|Bahamas|1242\nBH|Bahrain|973\nBD|Bangladesh|880\nBB|Barbados|1246\nBY|Belarus|375\nBE|Belgium|32\nBZ|Belize|501\nBJ|Benin|229\nBM|Bermuda|1441\nBT|Bhutan|975\nBO|Bolivia|591\nBQ|Caribbean Netherlands|599\nBA|Bosnia and Herzegovina|387\nBW|Botswana|267\nBR|Brazil|55\nIO|British Indian Ocean Territory|246\nVG|British Virgin Islands|1284\nBN|Brunei|673\nBG|Bulgaria|359\nBF|Burkina Faso|226\nBI|Burundi|257\nKH|Cambodia|855\nCM|Cameroon|237\nCA|Canada|1\nCV|Cape Verde|238\nKY|Cayman Islands|1345\nCF|Central African Republic|236\nTD|Chad|235\nCL|Chile|56\nCN|China|86\nCX|Christmas Island|61\nCC|Cocos (Keeling) Islands|61\nCO|Colombia|57\nKM|Comoros|269\nCG|Congo|242\nCD|DR Congo|243\nCK|Cook Islands|682\nCR|Costa Rica|506\nCI|Côte d'Ivoire|225\nHR|Croatia|385\nCU|Cuba|53\nCW|Curaçao|599\nCY|Cyprus|357\nCZ|Czechia|420\nDK|Denmark|45\nDJ|Djibouti|253\nDM|Dominica|1767\nDO|Dominican Republic|1809\nEC|Ecuador|593\nEG|Egypt|20\nSV|El Salvador|503\nGQ|Equatorial Guinea|240\nER|Eritrea|291\nEE|Estonia|372\nSZ|Eswatini|268\nET|Ethiopia|251\nFK|Falkland Islands|500\nFO|Faroe Islands|298\nFJ|Fiji|679\nFI|Finland|358\nFR|France|33\nGF|French Guiana|594\nPF|French Polynesia|689\nGA|Gabon|241\nGM|Gambia|220\nGE|Georgia|995\nDE|Germany|49\nGH|Ghana|233\nGI|Gibraltar|350\nGR|Greece|30\nGL|Greenland|299\nGD|Grenada|1473\nGP|Guadeloupe|590\nGU|Guam|1671\nGT|Guatemala|502\nGG|Guernsey|44\nGN|Guinea|224\nGW|Guinea-Bissau|245\nGY|Guyana|592\nHT|Haiti|509\nHN|Honduras|504\nHK|Hong Kong|852\nHU|Hungary|36\nIS|Iceland|354\nIN|India|91\nID|Indonesia|62\nIR|Iran|98\nIQ|Iraq|964\nIE|Ireland|353\nIM|Isle of Man|44\nIL|Israel|972\nIT|Italy|39\nJM|Jamaica|1876\nJP|Japan|81\nJE|Jersey|44\nJO|Jordan|962\nKZ|Kazakhstan|7\nKE|Kenya|254\nKI|Kiribati|686\nXK|Kosovo|383\nKW|Kuwait|965\nKG|Kyrgyzstan|996\nLA|Laos|856\nLV|Latvia|371\nLB|Lebanon|961\nLS|Lesotho|266\nLR|Liberia|231\nLY|Libya|218\nLI|Liechtenstein|423\nLT|Lithuania|370\nLU|Luxembourg|352\nMO|Macao|853\nMG|Madagascar|261\nMW|Malawi|265\nMY|Malaysia|60\nMV|Maldives|960\nML|Mali|223\nMT|Malta|356\nMH|Marshall Islands|692\nMQ|Martinique|596\nMR|Mauritania|222\nMU|Mauritius|230\nYT|Mayotte|262\nMX|Mexico|52\nFM|Micronesia|691\nMD|Moldova|373\nMC|Monaco|377\nMN|Mongolia|976\nME|Montenegro|382\nMS|Montserrat|1664\nMA|Morocco|212\nMZ|Mozambique|258\nMM|Myanmar|95\nNA|Namibia|264\nNR|Nauru|674\nNP|Nepal|977\nNL|Netherlands|31\nNC|New Caledonia|687\nNZ|New Zealand|64\nNI|Nicaragua|505\nNE|Niger|227\nNG|Nigeria|234\nNU|Niue|683\nNF|Norfolk Island|672\nKP|North Korea|850\nMK|North Macedonia|389\nMP|Northern Mariana Islands|1670\nNO|Norway|47\nOM|Oman|968\nPK|Pakistan|92\nPW|Palau|680\nPS|Palestine|970\nPA|Panama|507\nPG|Papua New Guinea|675\nPY|Paraguay|595\nPE|Peru|51\nPH|Philippines|63\nPL|Poland|48\nPT|Portugal|351\nPR|Puerto Rico|1787\nQA|Qatar|974\nRE|Réunion|262\nRO|Romania|40\nRU|Russia|7\nRW|Rwanda|250\nBL|Saint Barthélemy|590\nSH|Saint Helena|290\nKN|Saint Kitts and Nevis|1869\nLC|Saint Lucia|1758\nMF|Saint Martin|590\nPM|Saint Pierre and Miquelon|508\nVC|Saint Vincent and the Grenadines|1784\nWS|Samoa|685\nSM|San Marino|378\nST|São Tomé and Príncipe|239\nSA|Saudi Arabia|966\nSN|Senegal|221\nRS|Serbia|381\nSC|Seychelles|248\nSL|Sierra Leone|232\nSG|Singapore|65\nSX|Sint Maarten|1721\nSK|Slovakia|421\nSI|Slovenia|386\nSB|Solomon Islands|677\nSO|Somalia|252\nZA|South Africa|27\nKR|South Korea|82\nSS|South Sudan|211\nES|Spain|34\nLK|Sri Lanka|94\nSD|Sudan|249\nSR|Suriname|597\nSJ|Svalbard and Jan Mayen|47\nSE|Sweden|46\nCH|Switzerland|41\nSY|Syria|963\nTW|Taiwan|886\nTJ|Tajikistan|992\nTZ|Tanzania|255\nTH|Thailand|66\nTL|Timor-Leste|670\nTG|Togo|228\nTK|Tokelau|690\nTO|Tonga|676\nTT|Trinidad and Tobago|1868\nTN|Tunisia|216\nTR|Türkiye|90\nTM|Turkmenistan|993\nTC|Turks and Caicos Islands|1649\nTV|Tuvalu|688\nUG|Uganda|256\nUA|Ukraine|380\nAE|United Arab Emirates|971\nGB|United Kingdom|44\nUS|United States|1\nVI|US Virgin Islands|1340\nUY|Uruguay|598\nUZ|Uzbekistan|998\nVU|Vanuatu|678\nVA|Vatican City|379\nVE|Venezuela|58\nVN|Vietnam|84\nWF|Wallis and Futuna|681\nEH|Western Sahara|212\nYE|Yemen|967\nZM|Zambia|260\nZW|Zimbabwe|263";
+
+  var C = RAW.split("\n").map(function (l) { var p = l.split("|"); return { iso: p[0], name: p[1], code: p[2] }; });
+  C.sort(function (a, b) { return a.name.localeCompare(b.name); });
+  var byIso = {};
+  C.forEach(function (c) { byIso[c.iso] = c; });
+
+  // When several countries share one code (+1, +44, +7...), pasting "+..." picks the main one.
+  var PREFER = ["US", "GB", "RU", "AU", "MA", "RE", "FI", "NO", "GP", "CW"];
+  var byCode = {};
+  C.forEach(function (c) { if (!byCode[c.code]) byCode[c.code] = c; });
+  PREFER.forEach(function (iso) { byCode[byIso[iso].code] = byIso[iso]; });
+
+  var EXAMPLES = { PK: "300 1234567", IN: "98765 43210", US: "202 555 0143", GB: "7400 123456", AE: "50 123 4567", SA: "50 123 4567", CA: "416 555 0198", AU: "412 345 678" };
+  var CHIPS = ["PK", "IN", "US", "GB", "AE", "SA"];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var cbtn = $("cbtn"), cflag = $("cflag"), ccode = $("ccode"), panel = $("panel"), q = $("q"), list = $("list");
+  var num = $("num"), statusEl = $("status"), meter = $("meter"), digitsEl = $("digits"), chipsEl = $("chips");
+  var out = $("out"), rc = $("rc"), rcode = $("rcode"), e164 = $("e164"), copyBtn = $("copy"), cnote = $("cnote");
+
+  var current = byIso.PK;
+  var touched = false;
+  var filtered = C.slice();
+  var active = 0;
+
+  try { var saved = localStorage.getItem("dial-country"); if (saved && byIso[saved]) current = byIso[saved]; } catch (e) {}
+
+  function flag(iso) {
+    return iso.replace(/./g, function (ch) { return String.fromCodePoint(127397 + ch.charCodeAt(0)); });
+  }
+  function fmtCode(code) {
+    return code.length === 4 && code.charAt(0) === "1" ? "+1 " + code.slice(1) : "+" + code;
+  }
+
+  // meter ticks
+  for (var i = 0; i < 15; i++) meter.appendChild(document.createElement("i"));
+
+  // chips
+  CHIPS.forEach(function (iso) {
+    var c = byIso[iso];
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.dataset.iso = iso;
+    b.setAttribute("aria-pressed", "false");
+    b.innerHTML = "<span aria-hidden='true'>" + flag(iso) + "</span><span>" + c.name.replace("United Arab Emirates", "UAE").replace("United Kingdom", "UK").replace("United States", "USA").replace("Saudi Arabia", "Saudi") + "</span><span class='m'>" + fmtCode(c.code) + "</span>";
+    b.addEventListener("click", function () { setCountry(c); num.focus(); });
+    chipsEl.appendChild(b);
+  });
+
+  function renderList() {
+    list.innerHTML = "";
+    if (!filtered.length) {
+      var e = document.createElement("li");
+      e.className = "empty"; e.setAttribute("role", "presentation"); e.textContent = "No country matches. Try another name or code.";
+      e.style.cursor = "default";
+      list.appendChild(e);
+      return;
+    }
+    var frag = document.createDocumentFragment();
+    filtered.forEach(function (c, idx) {
+      var li = document.createElement("li");
+      li.id = "opt-" + c.iso + "-" + idx;
+      li.setAttribute("role", "option");
+      li.setAttribute("aria-selected", c.iso === current.iso ? "true" : "false");
+      li.dataset.idx = idx;
+      if (idx === active) li.className = "active";
+      li.innerHTML = "<span class='f' aria-hidden='true'>" + flag(c.iso) + "</span><span class='n'></span><span class='c'>" + fmtCode(c.code) + "</span>";
+      li.querySelector(".n").textContent = c.name;
+      frag.appendChild(li);
+    });
+    list.appendChild(frag);
+  }
+
+  function setActive(idx, scroll) {
+    var items = list.querySelectorAll("li[role=option]");
+    if (!items.length) return;
+    active = Math.max(0, Math.min(items.length - 1, idx));
+    items.forEach(function (li, i) { li.classList.toggle("active", i === active); });
+    var el = items[active];
+    q.setAttribute("aria-activedescendant", el.id);
+    if (scroll) el.scrollIntoView({ block: "nearest" });
+  }
+
+  function filter() {
+    var t = q.value.trim().toLowerCase().replace(/^\+/, "");
+    filtered = !t ? C.slice() : C.filter(function (c) {
+      return c.name.toLowerCase().indexOf(t) !== -1 || c.iso.toLowerCase() === t || c.code.indexOf(t) === 0;
+    });
+    var cur = filtered.indexOf(current);
+    active = cur > -1 && !t ? cur : 0;
+    renderList();
+    setActive(active, true);
+  }
+
+  function openPanel() {
+    panel.hidden = false;
+    cbtn.setAttribute("aria-expanded", "true");
+    q.value = "";
+    filter();
+    q.focus();
+  }
+  function closePanel(returnFocus) {
+    panel.hidden = true;
+    cbtn.setAttribute("aria-expanded", "false");
+    if (returnFocus) cbtn.focus();
+  }
+
+  cbtn.addEventListener("click", function () { panel.hidden ? openPanel() : closePanel(true); });
+  q.addEventListener("input", filter);
+  q.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowDown") { e.preventDefault(); setActive(active + 1, true); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActive(active - 1, true); }
+    else if (e.key === "Enter") { e.preventDefault(); if (filtered[active]) { setCountry(filtered[active]); closePanel(false); num.focus(); } }
+    else if (e.key === "Escape") { e.preventDefault(); closePanel(true); }
+    else if (e.key === "Tab") { closePanel(false); }
+  });
+  list.addEventListener("mousemove", function (e) {
+    var li = e.target.closest("li[role=option]");
+    if (li && +li.dataset.idx !== active) setActive(+li.dataset.idx, false);
+  });
+  list.addEventListener("click", function (e) {
+    var li = e.target.closest("li[role=option]");
+    if (!li) return;
+    setCountry(filtered[+li.dataset.idx]);
+    closePanel(false);
+    num.focus();
+  });
+  document.addEventListener("pointerdown", function (e) {
+    if (!panel.hidden && !$("field").contains(e.target)) closePanel(false);
+  });
+
+  function setCountry(c) {
+    current = c;
+    try { localStorage.setItem("dial-country", c.iso); } catch (e) {}
+    update();
+  }
+
+  var ICONS = {
+    ok: "<svg viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='8' cy='8' r='6.5'/><path d='M5 8.2l2 2 4-4.4'/></svg>",
+    warn: "<svg viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M8 1.8L14.6 13H1.4z'/><path d='M8 6.4v3.2M8 11.4v.1'/></svg>",
+    bad: "<svg viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='8' cy='8' r='6.5'/><path d='M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8'/></svg>",
+    idle: "<svg viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='8' cy='8' r='6.5'/><path d='M8 7.2v4M8 4.9v.1'/></svg>"
+  };
+  function setStatus(state, text) {
+    statusEl.dataset.state = state;
+    statusEl.innerHTML = ICONS[state] + "<span></span>";
+    statusEl.lastChild.textContent = text;
+  }
+
+  function update() {
+    var raw = num.value;
+    var digits = raw.replace(/\D/g, "");
+    var national = digits.replace(/^0+/, "");
+    var dropped = digits.length > national.length;
+    var total = current.code.length + national.length;
+    var full = "+" + current.code + national;
+
+    cflag.textContent = flag(current.iso);
+    ccode.textContent = fmtCode(current.code);
+    cbtn.setAttribute("aria-label", "Country: " + current.name + ", " + fmtCode(current.code));
+    num.placeholder = EXAMPLES[current.iso] || "Phone number";
+
+    CHIPS.forEach(function (iso, i) { chipsEl.children[i].setAttribute("aria-pressed", String(iso === current.iso)); });
+
+    var ticks = meter.children;
+    for (var i = 0; i < 15; i++) ticks[i].className = i < Math.min(total, 15) ? "on" : "";
+    meter.className = "meter" + (total > 15 ? " over" : "");
+    digitsEl.textContent = total + (total === 1 ? " digit" : " digits") + " with code";
+
+    if (!national.length) {
+      setStatus("idle", "Type the number without the country code.");
+    } else if (total > 15) {
+      setStatus("bad", "Too long. International numbers have at most 15 digits including the code.");
+    } else if (national.length < 4) {
+      setStatus("warn", "Too short for a phone number. Keep typing.");
+    } else if (!touched) {
+      setStatus("ok", "Example number filled in. Type over it with your own.");
+    } else {
+      setStatus("ok", dropped ? "Length is fine. The leading 0 was dropped." : "Length is fine.");
+    }
+
+    if (national.length) {
+      out.innerHTML = "<span class='dim'>+" + current.code + "</span> " + national.replace(/</g, "");
+    } else {
+      out.innerHTML = "<span class='dim'>+" + current.code + "</span> …";
+    }
+    rc.textContent = current.name;
+    rcode.textContent = fmtCode(current.code);
+    e164.textContent = national.length ? full : "—";
+    copyBtn.disabled = !national.length || total > 15;
+    cnote.textContent = "";
+    syncSend(national.length >= 4 && total <= 15, full);
+  }
+
+  function tryParseInternational(v) {
+    var t = v.trim();
+    var d = t.replace(/\D/g, "");
+    var intl = t.charAt(0) === "+" || (t.slice(0, 2) === "00" && d.length > 6);
+    if (!intl) return false;
+    if (t.charAt(0) !== "+") d = d.replace(/^00/, "");
+    for (var len = 4; len >= 1; len--) {
+      var c = byCode[d.slice(0, len)];
+      if (c) {
+        current = c;
+        try { localStorage.setItem("dial-country", c.iso); } catch (e) {}
+        num.value = d.slice(len);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  num.addEventListener("input", function () {
+    touched = true;
+    if (!tryParseInternational(num.value)) {
+      num.value = num.value.replace(/[^0-9 ()\-]/g, "");
+    }
+    update();
+  });
+
+  copyBtn.addEventListener("click", function () {
+    var text = e164.textContent;
+    function done(ok) { cnote.textContent = ok ? "Copied " + text : "Select the saved-as number above and copy it."; }
+    try {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { fallback(); });
+    } catch (e) { fallback(); }
+    function fallback() {
+      try {
+        var r = document.createRange(); r.selectNodeContents(e164);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      } catch (e) {}
+      done(false);
+    }
+  });
+
+  /* ---------- OTP ---------- */
+  var sendBtn = $("send"), otpBox = $("otp"), otpT = $("otpt"), otpRow = $("otprow"), demoEl = $("demo");
+  var ostatus = $("ostatus"), verifyBtn = $("verify"), resendBtn = $("resend"), changeBtn = $("change");
+  var otpTo = null, timer = null, busy = false, lastValid = false, lastFull = "";
+
+  // Talks to server.js. The SMS is sent by your server through Twilio Verify.
+  function postJson(url, body) {
+    return fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (d) { return { status: r.status, data: d }; });
+      });
+  }
+  var OTP = {
+    demo: false,
+    send: function (number) {
+      return postJson("/api/send-otp", { phone: number }).then(function (x) {
+        if (x.status < 200 || x.status >= 300) throw new Error(x.data.error || "Could not send the code.");
+        return {};
+      });
+    },
+    verify: function (number, entered) {
+      return postJson("/api/verify-otp", { phone: number, code: entered }).then(function (x) {
+        if (x.data.ok) return { ok: true };
+        if (x.status >= 500) throw new Error(x.data.error || "Could not check the code.");
+        wrongMsg = x.data.error || "";
+        return { ok: false, left: x.data.maxed ? 0 : 1 };
+      });
+    }
+  };
+  var wrongMsg = "", lastErr = "";
+
+  var boxes = [];
+  for (var k = 0; k < 6; k++) {
+    var b = document.createElement("input");
+    b.type = "text"; b.inputMode = "numeric"; b.maxLength = 1; b.className = "ob"; b.id = "ob" + k;
+    b.autocomplete = k === 0 ? "one-time-code" : "off";
+    b.setAttribute("aria-label", "Digit " + (k + 1) + " of 6");
+    otpRow.appendChild(b); boxes.push(b);
+  }
+  function codeValue() { return boxes.map(function (x) { return x.value; }).join(""); }
+  function syncVerify() { verifyBtn.disabled = codeValue().length !== 6; }
+  boxes.forEach(function (bx, i) {
+    bx.addEventListener("input", function () {
+      bx.value = bx.value.replace(/\D/g, "").slice(0, 1);
+      if (bx.value && i < 5) boxes[i + 1].focus();
+      syncVerify();
+    });
+    bx.addEventListener("keydown", function (e) {
+      if (e.key === "Backspace" && !bx.value && i > 0) { boxes[i - 1].focus(); boxes[i - 1].value = ""; syncVerify(); }
+      else if (e.key === "ArrowLeft" && i > 0) boxes[i - 1].focus();
+      else if (e.key === "ArrowRight" && i < 5) boxes[i + 1].focus();
+      else if (e.key === "Enter" && !verifyBtn.disabled) verifyBtn.click();
+    });
+    bx.addEventListener("focus", function () { bx.select(); });
+    bx.addEventListener("paste", function (e) {
+      var t = (e.clipboardData || window.clipboardData).getData("text").replace(/\D/g, "").slice(0, 6);
+      if (!t) return;
+      e.preventDefault();
+      for (var j = 0; j < 6; j++) boxes[j].value = t.charAt(j) || "";
+      boxes[Math.min(t.length, 5)].focus();
+      syncVerify();
+    });
+  });
+
+  function setO(state, text) {
+    ostatus.dataset.state = state;
+    ostatus.innerHTML = ICONS[state] + "<span></span>";
+    ostatus.lastChild.textContent = text;
+  }
+  function startTimer() {
+    clearInterval(timer);
+    var left = 30;
+    resendBtn.disabled = true;
+    resendBtn.textContent = "Resend in " + left + "s";
+    timer = setInterval(function () {
+      left--;
+      if (left <= 0) { clearInterval(timer); resendBtn.disabled = false; resendBtn.textContent = "Resend OTP"; }
+      else resendBtn.textContent = "Resend in " + left + "s";
+    }, 1000);
+  }
+  function resetOtp() {
+    otpTo = null;
+    clearInterval(timer);
+    otpBox.hidden = true; demoEl.hidden = true;
+    sendBtn.hidden = false; sendBtn.textContent = "Send OTP";
+    verifyBtn.hidden = false; resendBtn.hidden = false;
+    boxes.forEach(function (x) { x.value = ""; x.disabled = false; });
+    syncVerify();
+  }
+  function syncSend(valid, full) {
+    lastValid = valid; lastFull = full;
+    if (otpTo && otpTo !== full) resetOtp();
+    sendBtn.disabled = !valid || busy;
+  }
+  function doSend() {
+    if (!lastValid || busy) return;
+    var n = lastFull;
+    busy = true; sendBtn.disabled = true; resendBtn.disabled = true;
+    sendBtn.textContent = "Sending…";
+    OTP.send(n).then(function (r) {
+      busy = false;
+      otpTo = n;
+      sendBtn.hidden = true;
+      otpBox.hidden = false;
+      otpT.textContent = OTP.demo ? "Enter the 6-digit test code for " + n : "Enter the 6-digit code sent to " + n;
+      boxes.forEach(function (x) { x.value = ""; x.disabled = false; });
+      verifyBtn.hidden = false; resendBtn.hidden = false; syncVerify();
+      if (OTP.demo && r && r.demoCode) {
+        demoEl.hidden = false;
+        demoEl.textContent = "Demo mode: no SMS is sent from this page. Your test code is " + r.demoCode + ".";
+      } else { demoEl.hidden = true; }
+      setO("idle", OTP.demo ? "Type the test code above to continue." : "Code sent. It can take a few seconds to arrive.");
+      startTimer();
+      boxes[0].focus();
+    }, function (err) {
+      lastErr = (err && err.message) || "";
+      busy = false;
+      sendBtn.textContent = "Send OTP";
+      sendBtn.disabled = !lastValid;
+      if (!otpBox.hidden) { sendBtn.hidden = true; resendBtn.disabled = false; setO("bad", lastErr || "Could not send the code. Try again."); }
+      else setStatus("bad", lastErr || "Could not send the code. Check your connection and try again.");
+    });
+  }
+  sendBtn.addEventListener("click", doSend);
+  resendBtn.addEventListener("click", doSend);
+  changeBtn.addEventListener("click", function () { resetOtp(); num.focus(); });
+  verifyBtn.addEventListener("click", function () {
+    var c = codeValue();
+    if (c.length !== 6 || !otpTo) return;
+    verifyBtn.disabled = true;
+    OTP.verify(otpTo, c).then(function (r) {
+      if (r.ok) {
+        clearInterval(timer);
+        boxes.forEach(function (x) { x.disabled = true; });
+        verifyBtn.hidden = true; resendBtn.hidden = true; demoEl.hidden = true;
+        setO("ok", "Number verified: " + otpTo);
+      } else if (r.left > 0) {
+        setO("bad", "Wrong code. Check the SMS and try again.");
+        boxes.forEach(function (x) { x.value = ""; }); boxes[0].focus(); syncVerify();
+      } else {
+        clearInterval(timer);
+        boxes.forEach(function (x) { x.disabled = true; });
+        resendBtn.disabled = false; resendBtn.textContent = "Resend OTP";
+        setO("bad", wrongMsg || "Too many wrong tries. Send a new code.");
+      }
+    }, function (err) { verifyBtn.disabled = false; setO("bad", (err && err.message) || "Could not check the code. Try again."); });
+  });
+
+  update();
+})();
+</script>
+
+
+
+</body>
+</html>
